@@ -2,6 +2,8 @@ package com.reactor.netty.http2.client;
 
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
@@ -12,8 +14,11 @@ import reactor.netty.http.server.HttpServer;
 import reactor.test.StepVerifier;
 
 import java.security.cert.CertificateException;
+import java.util.stream.IntStream;
 
 public class Http2ClientTests {
+
+    private static final Logger logger =  LoggerFactory.getLogger(Http2ClientTests.class);
 
     private static final DisposableServer http2Server = mkHttp2Server();
 
@@ -32,7 +37,7 @@ public class Http2ClientTests {
                     //.http2Settings(setting -> setting.maxConcurrentStreams(100))
                     .handle((req, res) -> res.sendString(Mono.just(RESPONSE_STR)))
                     .wiretap(true).bindNow();
-            System.out.println("Reactor Netty started on " + server.port());
+            logger.info("Reactor Netty started on " + server.port());
             return server;
         } catch (CertificateException e) {
             throw new RuntimeException(e);
@@ -41,7 +46,7 @@ public class Http2ClientTests {
 
     @Test
     public void testHttp2Client() {
-        Http2SslContextSpec clientCtx =
+        final Http2SslContextSpec clientCtx =
                 Http2SslContextSpec.forClient()
                         .configure(builder -> builder.trustManager(InsecureTrustManagerFactory.INSTANCE));
 
@@ -50,12 +55,12 @@ public class Http2ClientTests {
                 .protocol(HttpProtocol.H2)
                 .wiretap(true);
 
-        StepVerifier.create(client
-                .get()
-                .uri("https://localhost:" + http2Server.port())
-                .responseContent()
-                .aggregate()
-                .asString()
-        ).expectNext(RESPONSE_STR).verifyComplete();
+        IntStream.range(0, 4).forEach(index -> {
+            logger.info("In Iteration " + index);
+            StepVerifier.create(client.get().uri("https://localhost:" + http2Server.port()).responseContent().aggregate().asString())
+                    .expectNext(RESPONSE_STR)
+                    .verifyComplete();
+        });
+
     }
 }
