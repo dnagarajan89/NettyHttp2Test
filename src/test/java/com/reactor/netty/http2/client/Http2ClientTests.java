@@ -1,5 +1,7 @@
 package com.reactor.netty.http2.client;
 
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import org.slf4j.Logger;
@@ -7,12 +9,12 @@ import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
-import reactor.netty.http.Http2SslContextSpec;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.server.HttpServer;
 import reactor.test.StepVerifier;
 
+import javax.net.ssl.SSLException;
 import java.security.cert.CertificateException;
 import java.util.stream.IntStream;
 
@@ -28,7 +30,7 @@ public class Http2ClientTests {
     static DisposableServer mkHttp2Server() {
         try {
             final SelfSignedCertificate ssc = new SelfSignedCertificate();
-            final Http2SslContextSpec serverCtx = Http2SslContextSpec.forServer(ssc.certificate(), ssc.privateKey());
+            final SslContext serverCtx = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
 
             final DisposableServer server = HttpServer.create()
                     .protocol(HttpProtocol.H2)
@@ -39,16 +41,16 @@ public class Http2ClientTests {
                     .wiretap(true).bindNow();
             logger.info("Reactor Netty started on " + server.port());
             return server;
-        } catch (CertificateException e) {
+        } catch (CertificateException | SSLException e) {
             throw new RuntimeException(e);
         }
     }
 
     @Test
-    public void testHttp2Client() {
-        final Http2SslContextSpec clientCtx =
-                Http2SslContextSpec.forClient()
-                        .configure(builder -> builder.trustManager(InsecureTrustManagerFactory.INSTANCE));
+    public void testHttp2Client() throws SSLException {
+        final SslContext clientCtx =
+                SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build();
+                       // .configure(builder -> builder.trustManager(InsecureTrustManagerFactory.INSTANCE));
 
         final HttpClient client =  HttpClient.create()
                 .secure(sslContextSpec -> sslContextSpec.sslContext(clientCtx))
